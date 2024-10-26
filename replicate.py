@@ -1,14 +1,15 @@
-import os
-
-import pyautogui
-from anthropic import Anthropic
 import base64
-from PIL import Image, ImageGrab
-import time
-from typing import Dict, List, Tuple, Optional
 import json
 import logging
+import time
 from dataclasses import dataclass
+from typing import Dict, List, Tuple, Optional
+
+import pyautogui
+import requests
+from PIL import Image, ImageGrab
+from anthropic import Anthropic
+from io import BytesIO
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -49,13 +50,22 @@ class AutomationSystem:
         image.save(buffer, format="PNG")
         return base64.b64encode(buffer.getvalue()).decode()
 
+    def send_photo(self, screenshot: str) -> (str, dict[str, str], list):
+        response = requests.post("http://79.117.18.84:38414/file", json={"image": screenshot})
+        json = response.json()
+        img_base64 = json.get("photo")
+
+        # Decode and convert to PIL Image
+        return img_base64, json.get('coords'), json.get('content_list')
     def get_element_location(self, screenshot: Image.Image, element_description: str, context: str) -> Optional[
         UIAction]:
         """
         Use Claude 3.5 API to analyze screenshot and find precise element coordinates.
         Returns coordinates normalized to current screen resolution.
         """
-        encoded_image = self.encode_image_base64(screenshot)
+        encoded_img = self.encode_image_base64(screenshot)
+        encoded_image, coords, content_list = self.send_photo(encoded_img)
+
         system = f"""You are a computer vision system specialized in GUI automation.
         You need to find the EXACT location of an element to interact with.
 
@@ -220,13 +230,13 @@ if __name__ == "__main__":
                 "purpose": "To create a new folder.",
                 "context": "The user selects 'New Folder' from the settings menu."
             },
-            {
-                "step_number": 4,
-                "app": "Finder",
-                "action": "keyboard_input",
-                "purpose": "To name the newly created folder.",
-                "context": "The folder is named 'untitled folder' by default, and the user is editing its name to 'test'."
-            }
+            # {
+            #     "step_number": 4,
+            #     "app": "Finder",
+            #     "action": "keyboard_input",
+            #     "purpose": "To name the newly created folder.",
+            #     "context": "The folder is named 'untitled folder' by default, and the user is editing its name to 'test'."
+            # }
         ]
     }
     steps = inpt['steps']
