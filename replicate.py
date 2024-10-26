@@ -230,13 +230,13 @@ if __name__ == "__main__":
                 "purpose": "To create a new folder.",
                 "context": "The user selects 'New Folder' from the settings menu."
             },
-            # {
-            #     "step_number": 4,
-            #     "app": "Finder",
-            #     "action": "keyboard_input",
-            #     "purpose": "To name the newly created folder.",
-            #     "context": "The folder is named 'untitled folder' by default, and the user is editing its name to 'test'."
-            # }
+            {
+                "step_number": 4,
+                "app": "Finder",
+                "action": "keyboard_input",
+                "purpose": "To name the newly created folder.",
+                "context": "The folder is named 'untitled folder' by default, and the user is editing its name to 'test'."
+            }
         ]
     }
     steps = inpt['steps']
