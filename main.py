@@ -45,7 +45,7 @@ def process_video(video_path):
     # Parameters
     THRESHOLD = 70  # Difference threshold to detect state change
     MIN_DIFF_AREA = 500  # Minimum area of change to be considered relevant
-    FRAME_SKIP = 5  # Skip a certain number of frames to make the process faster
+    FRAME_SKIP = 15  # Skip a certain number of frames to make the process faster
 
     frame_count = 0  # Initialize frame counter for skipping frames
     previous_frame = None
@@ -148,12 +148,16 @@ def analyze_video(parsed_images):
                 "content": [
                     {
                         "type": "text",
-                        "text": "Analyze each screen capture thoroughly to explain the actions the user is taking in a detailed, step-by-step manner.\n\n# Steps\n\n1. **Observation**: Carefully examine each screen capture. Focus on elements like buttons, links, text input fields, menus, and visible actions.\n2. **Context Recognition**: Understand the context of each screen capture, including the application or software being used, based on visible elements.\n3. **Action Identification**: Identify the user actions in each capture.  Be careful at the whole context,  determine if the user is clicking, typing, navigating, or performing other actions. Keep in mind the operating system that is used, as commands can differ depending on each os (e.g. double clicking behaviour).\n4. **Sequence Construction**: Construct a logical sequence of steps as they occur across multiple captures, showing progression from one action to the next.\n5. **Explanation**: Provide an explanatory breakdown of each action, including:\n   - What the user is trying to achieve with the action (e.g., sending an email, updating a profile, etc.).\n   - Any possible choices or decisions being made by the user.\n   - Relevant details about specific features or elements in use.\n\nFull explanations for each capture will be as detailed as needed based on the complexity of the user actions depicted in the screen capture."
+                        "text": "analyze these screen captures carefully and explain in step by step the actions that the user is taking"
                     }
                 ]
-            }
+            },
+            {
+                "role": "user",
+                "content": parsed_images
+            },
         ],
-        temperature=0.7,
+        temperature=1,
         max_tokens=2048,
         top_p=1,
         frequency_penalty=0,
@@ -161,37 +165,24 @@ def analyze_video(parsed_images):
         response_format={
             "type": "json_schema",
             "json_schema": {
-                "name": "screen_capture_analysis",
+                "name": "video_explanation",
                 "strict": True,
                 "schema": {
                     "type": "object",
                     "properties": {
-                        "os": {
-                            "type": "string",
-                            "description": "Description of the operating system used",
-                            "enum": [
-                                "macos",
-                                "windows",
-                                "linux"
-                            ]
-                        },
                         "steps": {
                             "type": "array",
                             "description": "A sequence of steps explaining actions taken in the video.",
                             "items": {
                                 "type": "object",
                                 "properties": {
-                                    "step_number": {
-                                        "type": "integer",
-                                        "description": "The sequential number of the step in the action list."
-                                    },
-                                    "app": {
+                                    "state_description": {
                                         "type": "string",
-                                        "description": "The application the user is in"
+                                        "description": "A description of the state of the application or software at the time of the action."
                                     },
                                     "action": {
                                         "type": "string",
-                                        "description": "Actual action taken by the user.",
+                                        "description": "The specific action performed, such as right click, left click, typing, etc.",
                                         "enum": [
                                             "right_click",
                                             "left_click",
@@ -200,29 +191,22 @@ def analyze_video(parsed_images):
                                             "keyboard_input"
                                         ]
                                     },
-                                    "purpose": {
+                                    "outcome": {
                                         "type": "string",
-                                        "description": "What the user aims to achieve with this action."
-                                    },
-                                    "context": {
-                                        "type": "string",
-                                        "description": "Additional context or observations about the screen capture."
+                                        "description": "The result or consequence of the action taken."
                                     }
                                 },
                                 "required": [
-                                    "step_number",
-                                    "app",
+                                    "state_description",
                                     "action",
-                                    "purpose",
-                                    "context"
+                                    "outcome"
                                 ],
                                 "additionalProperties": False
                             }
                         }
                     },
                     "required": [
-                        "steps",
-                        "os"
+                        "steps"
                     ],
                     "additionalProperties": False
                 }
