@@ -34,7 +34,7 @@ export default function VideoFrame() {
         formData.append("file", video as Blob);
 
         try {
-            const response = await fetch('http://127.0.0.1:8000/video-to-frames/', {
+            const response = await fetch('http://79.117.18.84:38414/video-to-frames/', {
                 method: 'POST',
                 body: formData
             });
