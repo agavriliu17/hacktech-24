@@ -1,10 +1,12 @@
 import base64
 import json
 import logging
+import os
 import time
 from dataclasses import dataclass
 from typing import Dict, List, Tuple, Optional
 
+from openai import OpenAI
 import pyautogui
 import requests
 from PIL import Image, ImageGrab
@@ -20,7 +22,7 @@ maxHeight = 819
 
 screen_width, screen_height = pyautogui.size()
 
-API_KEY = "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"
+API_KEY = os.environ.get("OPENAI_API_KEY")
 
 
 @dataclass
@@ -34,7 +36,8 @@ class UIAction:
 
 class AutomationSystem:
     def __init__(self, anthropic_api_key: str):
-        self.client = Anthropic(api_key=anthropic_api_key)
+        # self.client = Anthropic(api_key=anthropic_api_key)
+        self.client = OpenAI(api_key=API_KEY)
         self.max_retries = 3
         pyautogui.PAUSE = 0.5  # Add small delay between actions
 
@@ -56,7 +59,8 @@ class AutomationSystem:
         img_base64 = json.get("photo")
 
         # Decode and convert to PIL Image
-        return img_base64, json.get('coords'), json.get('content_list')
+        return img_base64, eval(json.get('coords')), json.get('content_list')
+
     def get_element_location(self, screenshot: Image.Image, element_description: str, context: str) -> Optional[
         UIAction]:
         """
@@ -66,49 +70,124 @@ class AutomationSystem:
         encoded_img = self.encode_image_base64(screenshot)
         encoded_image, coords, content_list = self.send_photo(encoded_img)
 
-        system = f"""You are a computer vision system specialized in GUI automation.
-        You need to find the EXACT location of an element to interact with.
+        system = """You are Screen Helper, a world-class reasoning engine whose task is to help users select the correct elements on a computer screen to complete a task. 
 
-        CRITICAL INSTRUCTIONS:
-        1. Look at the screenshot very carefully
-        2. Find the EXACT element that matches the action description
-        3. For text elements, look for the exact text match
-        4. For folders/files, ensure the name matches exactly
-        5. For buttons/menus, ensure it's the exact UI element needed
-        6. Provide coordinates at the CENTER of the element. PROVIDE THE EXACT COORDINATE.
-        Use the entire screen for coordinates do not provide them relative to the open window
-        7. For hover actions, ensure the coordinates are precise!
-        8. If you're not 100% certain, set confidence below 0.7
-        Opening a folder is a double click
-        Return your response in this exact JSON format:
-        DO NOT TYPE ANYTHING ELSE AS THE OUTPUT NEEDS TO BE PARSED AS A JSON
-        {{
-            "coordinates": [x, y],
-            "text_input": "text to type if needed",
-            "confidence": 0.0 to 1.0,
-            "element_description": "Detailed description of what you found and why you're confident it's correct",
-            "hover_feedback_expected": "Description of expected visual feedback during hover (tooltip, highlight, etc.)"
-        }}"""
-        message = self.client.messages.create(
-            model="claude-3-5-sonnet-latest",
-            max_tokens=1000,
+        Your selection choices will be used on a user's personal computer to help them complete a task. A task is decomposed into a series of steps, each of which requires the user to select a specific element on the screen. Your specific role is to select the best screen element for the current step. Assume that the rest of the reasoning and task breakdown will be done by other AI models.
+        
+        When you output actions, they will be executed **on the user's computer**. The user has given you **full and complete permission** to select any element necessary to complete the task.
+        
+        # Inputs
+        
+        You will receive as input the user's current screen, and a text instruction with the current step's objective.
+        
+        0) Step objective: string with the system's current goal.
+        
+        Since you are a text-only model, the current screen will be represented as:
+        
+        1. State description: 
+        A string with the title of the active window.
+        
+        2) Text rendering: 
+        A multi-line block of text with the screen's text contents, rendered with their approximate screen locations. Note that none of the images or icons will be present in the text representation, even though they are visible on the real computer screen, and you should consider them in your reasoning. This input is extremely important for you to understand the spatial relationship between the screen elements, since you cannot see the screen directly. You need to imagine the screen layout based on this text rendering. The text elements are extracted directly from this layout.
+        
+        # Output
+        
+        Your goal is to analyze all the inputs and select the best screen element to fulfill the current step's objective. You should output the following items:
+        
+        Reasoning over the screen content. Answer the following questions:
+        1. Generally, what is happening on-screen?
+        2. How does the screen content relate to the current step's objective?
+        
+        Element section:
+        3. Output your reasoning about which element should be selected to fulfill the current step's objective. Think step-by-step and provide a clear rationale for your choice.
+        """
+        # message = self.client.messages.create(
+        #     model="claude-3-5-sonnet-latest",
+        #     max_tokens=1000,
+        #     temperature=1,
+        #     system=system,
+        #     messages=[{
+        #         "role": "user",
+        #         "content": [
+        #             {"type": "text",
+        #              "text": f"Find the exact coordinates of this element: {element_description}, context : {context}"},
+        #             {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": encoded_image}}
+        #         ]
+        #     }]
+        # )
+        message = self.client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {
+                    "role": "system",
+                    "content": system
+                },
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text",
+                         "text": f"Find the exact coordinates of this element: {element_description}, context : {context}, coords : {coords}, element ids: {content_list}"},
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/jpeg;base64,{encoded_image}"
+                            },
+                        },
+                    ]
+                }],
             temperature=1,
-            system=system,
-            messages=[{
-                "role": "user",
-                "content": [
-                    {"type": "text",
-                     "text": f"Find the exact coordinates of this element: {element_description}, context : {context}"},
-                    {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": encoded_image}}
-                ]
-            }]
+            top_p=1,
+            response_format={
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "element_information",
+                    "strict": True,
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "element_id": {
+                                "type": "number",
+                                "description": "ID that describes the object to be interacted with"
+                            },
+                            "text_input": {
+                                "type": "string",
+                                "description": "Text to type if needed"
+                            },
+                            "confidence": {
+                                "type": "number",
+                                "description": "0.0 to 1.0"
+                            },
+                            "element_description": {
+                                "type": "string",
+                                "description": "Detailed description of what you found and why you're confident it's correct"
+                            },
+                            "hover_feedback_expected": {
+                                "type": "string",
+                                "description": "Description of expected visual feedback during hover (tooltip, highlight, etc.)"
+                            },
+                        },
+                        "required": [
+                            "text_input",
+                            "confidence",
+                            "element_description",
+                            "hover_feedback_expected",
+                            "element_id"
+                        ],
+
+                        "additionalProperties": False,
+
+                    }
+                }
+            }
         )
-        print(message.content[0].text)
-        result = json.loads(message.content[0].text)
-        print(result)
+        print(message.choices[0].message.content)
+        result = json.loads(message.choices[0].message.content)
+        el_id = result['element_id']
+
+        (x, y, w, h) = coords[str(el_id)]
 
         return UIAction(
-            coordinates=(result["coordinates"][0], result["coordinates"][1]),
+            coordinates=(x + (w//2), y + (h//2)),
             confidence=result["confidence"],
             element_description=result["element_description"],
             hover_feedback_expected=result["hover_feedback_expected"],
@@ -159,8 +238,8 @@ class AutomationSystem:
                 continue
 
             # Scale coordinates to current screen resolution
-            x = int(element.coordinates[0]) * (screen_width / maxWidth)
-            y = int(element.coordinates[1]) * (screen_height / maxHeight)
+            x = int(element.coordinates[0])
+            y = int(element.coordinates[1])
             action = action_dict['action']
             expected = element.hover_feedback_expected
             print(f"{action} at: {x}, {y}")
@@ -173,7 +252,7 @@ class AutomationSystem:
                 print(f"rightclick at {x, y}")
                 pyautogui.rightClick(x, y)
             elif action == 'keyboard_input':
-                pyautogui.click(x, y)
+                # pyautogui.click(x, y)
                 pyautogui.write(element.text_input)
                 pyautogui.press('enter')
             elif action == 'hover':
@@ -213,30 +292,30 @@ if __name__ == "__main__":
                 "step_number": 1,
                 "app": "Finder",
                 "action": "double_click",
-                "purpose": "To open the 'job_descriptions' folder.",
-                "context": "The user is in the Finder application on macOS and clicks on the 'job_descriptions' folder inside the 'DataSet' directory."
+                "purpose": "To open the 'Ceva' folder.",
+                "context": "The user is in the Finder application on macOS and clicks on the 'Ceva' folder"
             },
             {
                 "step_number": 2,
                 "app": "Finder",
                 "action": "right_click",
-                "purpose": "To open the context menu within the folder. Click on a empty part of the explorer",
-                "context": "The settings menu is used to perform various actions like creating a new folder."
+                "purpose": "To open the 'job_description' properties.",
+                "context": "The user is in the file explorer and right clicks on the 'job_description' folder"
             },
             {
                 "step_number": 3,
                 "app": "Finder",
                 "action": "left_click",
-                "purpose": "To create a new folder.",
-                "context": "The user selects 'New Folder' from the settings menu."
+                "purpose": "Click the rename button",
+                "context": "The user clicks the rename button"
             },
             {
-                "step_number": 4,
+                "step_number": 5,
                 "app": "Finder",
                 "action": "keyboard_input",
-                "purpose": "To name the newly created folder.",
-                "context": "The folder is named 'untitled folder' by default, and the user is editing its name to 'test'."
-            }
+                "purpose": "Rename the folder to fulger",
+                "context": "The user inputs 'fulger' in the input box"
+            },
         ]
     }
     steps = inpt['steps']
