@@ -217,7 +217,7 @@ def analyze_video(parsed_images):
     return response
 
 
-parsed_images = process_video("recording2.mov")
-response = analyze_video(parsed_images)
+# parsed_images = process_video("recording2.mov")
+# response = analyze_video(parsed_images)
 
-print(response.choices[0].message.content)
+# print(response.choices[0].message.content)

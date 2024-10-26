@@ -1,5 +1,8 @@
-from fastapi import UploadFile, FastAPI
-import uvicorn
+from fastapi import File, UploadFile, FastAPI
+from fastapi.middleware.cors import CORSMiddlewareimport uvicorn
+from fastapi.responses import JSONResponse
+from main import analyze_video, process_video
+
 from PIL import Image
 from utils import get_som_labeled_img, check_ocr_box, get_caption_model_processor, get_yolo_model
 import torch
@@ -9,6 +12,9 @@ import json
 import base64
 from pydantic import BaseModel
 from io import BytesIO
+import tempfile
+import os
+
 device = 'cuda'
 
 som_model = get_yolo_model(model_path='weights/icon_detect/best.pt')
@@ -21,6 +27,14 @@ caption_model_processor = get_caption_model_processor(model_name="florence2", mo
 som_model.device, type(som_model)
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 cnt = 0
 # image_path = 'imgs/google_page.png'
@@ -65,6 +79,27 @@ def upload_file(file: ImageData):
         "coords": json.dumps(coords),
         "content_list": json.dumps(parsed_content_list)
     }
+
+@app.post("/video-to-frames/")
+async def video_to_frames(file: UploadFile = File(...)):
+    # Read video file into bytes
+    print("Received video file")
+
+    video_data = await file.read()
+
+    # Use a temporary file to store the video
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as temp_file:
+        temp_file.write(video_data)
+        temp_file_path = temp_file.name
+    
+    print("Read video file into bytes")
+    
+    frames = process_video(temp_file_path)
+    output = analyze_video(frames)
+    print(output)
+
+    return {"frames": frames, "output": output.choices[0].message.content}
+    
 
 @app.get("/")
 async def root():

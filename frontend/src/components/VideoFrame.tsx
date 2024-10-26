@@ -5,18 +5,14 @@ import { useDropzone } from 'react-dropzone'
 import { Loader2, Upload, Image as ImageIcon } from 'lucide-react'
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Progress } from "@/components/ui/progress"
+import StepsAnalysisCard from './StepsAnalysisCard'
 
-interface SelectedFrame {
-    timestamp: string
-    imageUrl: string
-}
 
 export default function VideoFrame() {
     const [video, setVideo] = useState<File | null>(null)
     const [processing, setProcessing] = useState(false)
-    const [progress, setProgress] = useState(0)
-    const [selectedFrames, setSelectedFrames] = useState<SelectedFrame[]>([])
+    const [content, setContent] = useState('')
+    const [selectedFrames, setSelectedFrames] = useState<string[]>([])
 
     const onDrop = useCallback((acceptedFiles: File[]) => {
         if (acceptedFiles[0]) {
@@ -31,32 +27,41 @@ export default function VideoFrame() {
         multiple: false
     })
 
-    const processVideo = () => {
+    const processVideo = async () => {
         setProcessing(true)
-        setProgress(0)
 
-        // Simulate processing delay and progress updates
-        const interval = setInterval(() => {
-            setProgress((prevProgress) => {
-                if (prevProgress >= 100) {
-                    clearInterval(interval)
-                    setProcessing(false)
-                    // Simulate selected frames
-                    setSelectedFrames([
-                        { timestamp: "00:00:05", imageUrl: "/placeholder.svg?height=180&width=320" },
-                        { timestamp: "00:00:15", imageUrl: "/placeholder.svg?height=180&width=320" },
-                        { timestamp: "00:00:30", imageUrl: "/placeholder.svg?height=180&width=320" },
-                    ])
-                    return 100
-                }
-                return prevProgress + 10
-            })
-        }, 500)
+        const formData = new FormData();
+        formData.append("file", video as Blob);
+
+        try {
+            const response = await fetch('http://127.0.0.1:8000/video-to-frames/', {
+                method: 'POST',
+                body: formData
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                console.log(data)
+                setSelectedFrames(data.frames)
+                const output = JSON.parse(data.output)
+                setContent(JSON.stringify(output, null, 2))
+            } else {
+                // setError('Failed to process video');
+            }
+        } catch (error) {
+            console.log(error)
+            // setError('Error uploading video');
+        } finally {
+            setProcessing(false)
+        }
     }
 
     return (
         <div className="container mx-auto p-4">
-            <Card className="w-full max-w-2xl mx-auto">
+            <div className="flex flex-col lg:flex-row gap-4">
+                <div className="flex flex-col lg:flex-col gap-4">
+
+                    <Card className="w-full max-w-2xl mx-auto md:min-w-[670px]">
                 <CardHeader>
                     <CardTitle className="text-2xl font-bold text-center">Video Frame Selector</CardTitle>
                 </CardHeader>
@@ -90,7 +95,14 @@ export default function VideoFrame() {
                     </Button>
                     {processing && (
                         <div className="w-full max-w-xs space-y-4" aria-live="polite" aria-busy={processing}>
-                            <Progress value={progress} className="w-full" />
+                                    <div className="w-full h-2 bg-secondary rounded-full overflow-hidden">
+                                        <div
+                                            className="h-full bg-primary rounded-full animate-indeterminate-progress"
+                                            style={{
+                                                width: '50%',
+                                            }}
+                                        />
+                                    </div>
                             <div className="flex justify-between items-center">
                                 <div className="space-y-2">
                                     <p className="text-sm font-medium">Analyzing video...</p>
@@ -118,18 +130,20 @@ export default function VideoFrame() {
                                     <div className="relative w-full aspect-video bg-gray-100 rounded-lg overflow-hidden">
                                         <ImageIcon className="absolute inset-0 m-auto text-gray-400" size={48} />
                                         <img
-                                            src={frame.imageUrl}
-                                            alt={`Selected frame at ${frame.timestamp}`}
+                                            src={`data:image/jpeg;base64,${frame}`}
+                                            alt={`Selected frame`}
                                             className="absolute inset-0 w-full h-full object-cover"
                                         />
                                     </div>
-                                    <p className="mt-2 text-sm text-gray-600">Timestamp: {frame.timestamp}</p>
                                 </div>
                             ))}
                         </div>
                     </CardContent>
                 </Card>
             )}
+                </div>
+                <StepsAnalysisCard content={content} />
+            </div>
         </div>
     )
 }
