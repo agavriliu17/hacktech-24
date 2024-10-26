@@ -6,6 +6,9 @@ import torch
 from ultralytics import YOLO
 from PIL import Image
 import json
+import base64
+from pydantic import BaseModel
+from io import BytesIO
 device = 'cuda'
 
 som_model = get_yolo_model(model_path='weights/icon_detect/best.pt')
@@ -42,14 +45,18 @@ def prelucrate_photo(image: str):
     return dino_labled_img, label_coordinates, parsed_content_list
 
 
-
+class ImageData(BaseModel):
+    image: str
 
 @app.post("/file")
-def upload_file(file: UploadFile):
-    im = Image.open(file.file)
+def upload_file(file: ImageData):
+    data = base64.b64decode(file.image)
+    im = Image.open(BytesIO(data))
     im.save("input.png")
     dino_labled_img, label_coordinates, parsed_content_list = prelucrate_photo("input.png")
     # coords = [npa.tolist() for npa in label_coordinates.values()]
+    output = Image.open(BytesIO(base64.b64decode(dino_labled_img)))
+    output.save("output.png")
     coords = {}
     for key,value in label_coordinates.items():
         coords[key] = value.tolist()
