@@ -1,8 +1,9 @@
+import VideoFrame from "@/components/VideoFrame";
 
 export default function Home() {
   return (
-    <div>
-      Hello world!
-    </div>
+    <>
+      <VideoFrame />
+    </>
   );
 }
