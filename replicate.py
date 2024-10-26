@@ -19,7 +19,7 @@ maxHeight = 819
 
 screen_width, screen_height = pyautogui.size()
 
-API_KEY = os.environ.get("ANTHROPIC_KEY")
+API_KEY = "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"
 
 
 @dataclass
@@ -27,8 +27,6 @@ class UIAction:
     coordinates: Tuple[int, int]
     confidence: float
     element_description: str
-    action: str
-    hover_duration: int
     hover_feedback_expected: str
     text_input: str
 
@@ -51,7 +49,8 @@ class AutomationSystem:
         image.save(buffer, format="PNG")
         return base64.b64encode(buffer.getvalue()).decode()
 
-    def get_element_location(self, screenshot: Image.Image, element_description: str) -> Optional[UIAction]:
+    def get_element_location(self, screenshot: Image.Image, element_description: str, context: str) -> Optional[
+        UIAction]:
         """
         Use Claude 3.5 API to analyze screenshot and find precise element coordinates.
         Returns coordinates normalized to current screen resolution.
@@ -75,9 +74,7 @@ class AutomationSystem:
         DO NOT TYPE ANYTHING ELSE AS THE OUTPUT NEEDS TO BE PARSED AS A JSON
         {{
             "coordinates": [x, y],
-            "action_type": "click/double_click/right_click/type/hover",
             "text_input": "text to type if needed",
-            "hover_duration": number of seconds to hover (if hover action),
             "confidence": 0.0 to 1.0,
             "element_description": "Detailed description of what you found and why you're confident it's correct",
             "hover_feedback_expected": "Description of expected visual feedback during hover (tooltip, highlight, etc.)"
@@ -90,12 +87,12 @@ class AutomationSystem:
             messages=[{
                 "role": "user",
                 "content": [
-                    {"type": "text", "text": f"Find the exact coordinates of this element: {element_description}"},
+                    {"type": "text",
+                     "text": f"Find the exact coordinates of this element: {element_description}, context : {context}"},
                     {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": encoded_image}}
                 ]
             }]
         )
-        print("HELO")
         print(message.content[0].text)
         result = json.loads(message.content[0].text)
         print(result)
@@ -104,8 +101,6 @@ class AutomationSystem:
             coordinates=(result["coordinates"][0], result["coordinates"][1]),
             confidence=result["confidence"],
             element_description=result["element_description"],
-            action=result["action_type"],
-            hover_duration=result["hover_duration"],
             hover_feedback_expected=result["hover_feedback_expected"],
             text_input=result["text_input"],
         )
@@ -147,7 +142,7 @@ class AutomationSystem:
         for attempt in range(self.max_retries):
             # Take screenshot and get element location
             screenshot = self.take_screenshot()
-            element = self.get_element_location(screenshot, action_dict)
+            element = self.get_element_location(screenshot, action_dict['purpose'], action_dict['context'])
 
             if not element or element.confidence < 0.8:
                 logger.warning(f"Low confidence or no element found. Attempt {attempt + 1}/{self.max_retries}")
@@ -156,18 +151,18 @@ class AutomationSystem:
             # Scale coordinates to current screen resolution
             x = int(element.coordinates[0]) * (screen_width / maxWidth)
             y = int(element.coordinates[1]) * (screen_height / maxHeight)
-            action = element.action
+            action = action_dict['action']
             expected = element.hover_feedback_expected
-
+            print(f"{action} at: {x}, {y}")
             # Perform the action based on action type
-            if action == 'click':
+            if action == 'left_click':
                 pyautogui.click(x, y)
             elif action == 'double_click':
                 pyautogui.doubleClick(x, y)
             elif action == 'right_click':
                 print(f"rightclick at {x, y}")
                 pyautogui.rightClick(x, y)
-            elif action == 'type':
+            elif action == 'keyboard_input':
                 pyautogui.click(x, y)
                 pyautogui.write(element.text_input)
                 pyautogui.press('enter')
@@ -175,7 +170,7 @@ class AutomationSystem:
                 pyautogui.moveTo(x, y)
 
             # Verify the outcome
-            time.sleep(0.05)  # Wait for UI to update
+            time.sleep(0.5)  # Wait for UI to update
             verification_screenshot = self.take_screenshot()
             return True
             # TODO: verify
@@ -201,39 +196,40 @@ class AutomationSystem:
 
 # Example usage
 if __name__ == "__main__":
-    steps = [
-        {
-            "action": "Hover over the folder named 'Dataset'",
-            "outcome": "Tooltip appears showing folder details"
-        },
-        {
-            "action": "Double click to open the folder",
-            "outcome": "Dataset folder opens showing 'cv' and 'job_descriptions' folders"
-        },
-        {
-            "action": "Hover over 'job_descriptions' folder",
-            "outcome": "Tooltip shows folder information"
-        },
-        {
-            "action": "Double click to open the folder",
-            "outcome": "job_descriptions folder opens"
-        },
-        {
-            "action": "Right click inside the file explorer UI, away from any elements",
-            "outcome": "Settings open"
-        },
-        {
-            "action": "Hover over create new",
-            "outcome": "A dialog opens"
-        },
-        {
-            "action": "Click on 'Folder' next to create new",
-            "outcome": "A dialog opens"
-        },
-
-        {"action": "Type aaaabbb",
-         "outcome": "New folder appears"}
-    ]
+    inpt = {
+        "os": "macos",
+        "steps": [
+            {
+                "step_number": 1,
+                "app": "Finder",
+                "action": "double_click",
+                "purpose": "To open the 'job_descriptions' folder.",
+                "context": "The user is in the Finder application on macOS and clicks on the 'job_descriptions' folder inside the 'DataSet' directory."
+            },
+            {
+                "step_number": 2,
+                "app": "Finder",
+                "action": "right_click",
+                "purpose": "To open the context menu within the folder. Click on a empty part of the explorer",
+                "context": "The settings menu is used to perform various actions like creating a new folder."
+            },
+            {
+                "step_number": 3,
+                "app": "Finder",
+                "action": "left_click",
+                "purpose": "To create a new folder.",
+                "context": "The user selects 'New Folder' from the settings menu."
+            },
+            {
+                "step_number": 4,
+                "app": "Finder",
+                "action": "keyboard_input",
+                "purpose": "To name the newly created folder.",
+                "context": "The folder is named 'untitled folder' by default, and the user is editing its name to 'test'."
+            }
+        ]
+    }
+    steps = inpt['steps']
     automation = AutomationSystem(
         API_KEY)
     success = automation.execute_steps(steps)
