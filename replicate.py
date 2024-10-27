@@ -6,12 +6,10 @@ import time
 from dataclasses import dataclass
 from typing import Dict, List, Tuple, Optional
 
-from openai import OpenAI
 import pyautogui
 import requests
 from PIL import Image, ImageGrab
 from anthropic import Anthropic
-from io import BytesIO
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -22,22 +20,18 @@ maxHeight = 819
 
 screen_width, screen_height = pyautogui.size()
 
-API_KEY = os.environ.get("OPENAI_API_KEY")
-
+API_KEY = os.environ.get("ANTHROPIC_KEY")
 
 @dataclass
 class UIAction:
     coordinates: Tuple[int, int]
-    confidence: float
-    element_description: str
-    hover_feedback_expected: str
     text_input: str
 
 
 class AutomationSystem:
     def __init__(self, anthropic_api_key: str):
         # self.client = Anthropic(api_key=anthropic_api_key)
-        self.client = OpenAI(api_key=API_KEY)
+        self.client = Anthropic(api_key=API_KEY)
         self.max_retries = 3
         pyautogui.PAUSE = 0.5  # Add small delay between actions
 
@@ -69,8 +63,7 @@ class AutomationSystem:
         """
         encoded_img = self.encode_image_base64(screenshot)
         encoded_image, coords, content_list = self.send_photo(encoded_img)
-
-        system = """You are Screen Helper, a world-class reasoning engine whose task is to help users select the correct elements on a computer screen to complete a task. 
+        system = f"""You are Screen Helper, a world-class reasoning engine whose task is to help users select the correct elements on a computer screen to complete a task. 
 
         Your selection choices will be used on a user's personal computer to help them complete a task. A task is decomposed into a series of steps, each of which requires the user to select a specific element on the screen. Your specific role is to select the best screen element for the current step. Assume that the rest of the reasoning and task breakdown will be done by other AI models.
         
@@ -92,105 +85,41 @@ class AutomationSystem:
         
         # Output
         
-        Your goal is to analyze all the inputs and select the best screen element to fulfill the current step's objective. You should output the following items:
-        
-        Reasoning over the screen content. Answer the following questions:
-        1. Generally, what is happening on-screen?
-        2. How does the screen content relate to the current step's objective?
-        
-        Element section:
-        3. Output your reasoning about which element should be selected to fulfill the current step's objective. Think step-by-step and provide a clear rationale for your choice.
+        Your goal is to analyze all the inputs and select the best screen element to fulfill the current step's objective. You should output the following items, in a JSON format. Just these keys no reasoning:
+        1. element id
+        2. text input if needed
+        CRITICAL INSTRUCTIONS:
+        Return your response in this exact JSON format:
+        DO NOT TYPE ANYTHING ELSE AS THE OUTPUT NEEDS TO BE PARSED AS A JSON!!! Output only this
+        {{
+            "element_id": number,
+            "text_input": "text to type if needed",
+        }}
         """
-        # message = self.client.messages.create(
-        #     model="claude-3-5-sonnet-latest",
-        #     max_tokens=1000,
-        #     temperature=1,
-        #     system=system,
-        #     messages=[{
-        #         "role": "user",
-        #         "content": [
-        #             {"type": "text",
-        #              "text": f"Find the exact coordinates of this element: {element_description}, context : {context}"},
-        #             {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": encoded_image}}
-        #         ]
-        #     }]
-        # )
-        message = self.client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {
-                    "role": "system",
-                    "content": system
-                },
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text",
-                         "text": f"Find the exact coordinates of this element: {element_description}, context : {context}, coords : {coords}, element ids: {content_list}"},
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:image/jpeg;base64,{encoded_image}"
-                            },
-                        },
-                    ]
-                }],
+        message = self.client.messages.create(
+            model="claude-3-5-sonnet-latest",
+            max_tokens=1000,
             temperature=1,
-            top_p=1,
-            response_format={
-                "type": "json_schema",
-                "json_schema": {
-                    "name": "element_information",
-                    "strict": True,
-                    "schema": {
-                        "type": "object",
-                        "properties": {
-                            "element_id": {
-                                "type": "number",
-                                "description": "ID that describes the object to be interacted with"
-                            },
-                            "text_input": {
-                                "type": "string",
-                                "description": "Text to type if needed"
-                            },
-                            "confidence": {
-                                "type": "number",
-                                "description": "0.0 to 1.0"
-                            },
-                            "element_description": {
-                                "type": "string",
-                                "description": "Detailed description of what you found and why you're confident it's correct"
-                            },
-                            "hover_feedback_expected": {
-                                "type": "string",
-                                "description": "Description of expected visual feedback during hover (tooltip, highlight, etc.)"
-                            },
-                        },
-                        "required": [
-                            "text_input",
-                            "confidence",
-                            "element_description",
-                            "hover_feedback_expected",
-                            "element_id"
-                        ],
-
-                        "additionalProperties": False,
-
-                    }
-                }
-            }
+            system=system,
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"type": "text",
+                     "text": f"Find the exact coordinates of this element: {element_description}, context : {context}, coords : {coords}, element ids: {content_list}"},
+                    {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": encoded_image}}
+                ]
+            }]
         )
-        print(message.choices[0].message.content)
-        result = json.loads(message.choices[0].message.content)
+
+        print(message.content[0].text)
+        result = json.loads(message.content[0].text)
+
         el_id = result['element_id']
 
         (x, y, w, h) = coords[str(el_id)]
 
         return UIAction(
             coordinates=(x + (w//2), y + (h//2)),
-            confidence=result["confidence"],
-            element_description=result["element_description"],
-            hover_feedback_expected=result["hover_feedback_expected"],
             text_input=result["text_input"],
         )
 
@@ -231,17 +160,12 @@ class AutomationSystem:
         for attempt in range(self.max_retries):
             # Take screenshot and get element location
             screenshot = self.take_screenshot()
-            element = self.get_element_location(screenshot, action_dict['purpose'], action_dict['context'])
-
-            if not element or element.confidence < 0.8:
-                logger.warning(f"Low confidence or no element found. Attempt {attempt + 1}/{self.max_retries}")
-                continue
+            element = self.get_element_location(screenshot, action_dict['outcome'], action_dict['state_description'])
 
             # Scale coordinates to current screen resolution
             x = int(element.coordinates[0])
             y = int(element.coordinates[1])
             action = action_dict['action']
-            expected = element.hover_feedback_expected
             print(f"{action} at: {x}, {y}")
             # Perform the action based on action type
             if action == 'left_click':
@@ -252,7 +176,7 @@ class AutomationSystem:
                 print(f"rightclick at {x, y}")
                 pyautogui.rightClick(x, y)
             elif action == 'keyboard_input':
-                # pyautogui.click(x, y)
+                pyautogui.click(x, y)
                 pyautogui.write(element.text_input)
                 pyautogui.press('enter')
             elif action == 'hover':
@@ -262,13 +186,6 @@ class AutomationSystem:
             time.sleep(0.5)  # Wait for UI to update
             verification_screenshot = self.take_screenshot()
             return True
-            # TODO: verify
-            # if self.verify_action(verification_screenshot, expected):
-            #     logger.info(f"Action successful: {expected}")
-            #     return True
-
-            # logger.warning(f"Action verification failed. Attempt {attempt + 1}/{self.max_retries}")
-
         logger.error(f"Action failed after {self.max_retries} attempts: {action_dict}")
         return False
 
@@ -285,39 +202,9 @@ class AutomationSystem:
 
 # Example usage
 if __name__ == "__main__":
-    inpt = {
-        "os": "macos",
-        "steps": [
-            {
-                "step_number": 1,
-                "app": "Finder",
-                "action": "double_click",
-                "purpose": "To open the 'Ceva' folder.",
-                "context": "The user is in the Finder application on macOS and clicks on the 'Ceva' folder"
-            },
-            {
-                "step_number": 2,
-                "app": "Finder",
-                "action": "right_click",
-                "purpose": "To open the 'job_description' properties.",
-                "context": "The user is in the file explorer and right clicks on the 'job_description' folder"
-            },
-            {
-                "step_number": 3,
-                "app": "Finder",
-                "action": "left_click",
-                "purpose": "Click the rename button",
-                "context": "The user clicks the rename button"
-            },
-            {
-                "step_number": 5,
-                "app": "Finder",
-                "action": "keyboard_input",
-                "purpose": "Rename the folder to fulger",
-                "context": "The user inputs 'fulger' in the input box"
-            },
-        ]
-    }
+    with open('input.txt') as f:
+        data = f.read()
+    inpt = json.loads(data)
     steps = inpt['steps']
     automation = AutomationSystem(
         API_KEY)
