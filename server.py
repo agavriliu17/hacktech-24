@@ -1,5 +1,5 @@
 from fastapi import File, UploadFile, FastAPI
-from fastapi.middleware.cors import CORSMiddlewareimport uvicorn
+from fastapi.middleware.cors import CORSMiddleware import uvicorn
 from fastapi.responses import JSONResponse
 from main import analyze_video, process_video
 
