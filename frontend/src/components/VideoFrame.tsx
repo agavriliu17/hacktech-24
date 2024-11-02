@@ -6,13 +6,14 @@ import { Loader2, Upload, Image as ImageIcon } from 'lucide-react'
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import StepsAnalysisCard from './StepsAnalysisCard'
+import { DEFAULT_TEXT } from '@/types/constants'
 // import { useAppContext } from '@/contexts/App'
 
 
 export default function VideoFrame() {
     const [video, setVideo] = useState<File | null>(null)
     const [processing, setProcessing] = useState(false)
-    const [content, setContent] = useState('')
+    const [content, setContent] = useState(DEFAULT_TEXT)
     const [selectedFrames, setSelectedFrames] = useState<string[]>([])
     // const { llmData } = useAppContext()
 
