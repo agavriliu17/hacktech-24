@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import StepsAnalysisCard from './StepsAnalysisCard'
 import { DEFAULT_TEXT } from '@/types/constants'
-// import { useAppContext } from '@/contexts/App'
+import { useAppContext } from '@/contexts/App'
 
 
 export default function VideoFrame() {
@@ -15,7 +15,7 @@ export default function VideoFrame() {
     const [processing, setProcessing] = useState(false)
     const [content, setContent] = useState(DEFAULT_TEXT)
     const [selectedFrames, setSelectedFrames] = useState<string[]>([])
-    // const { llmData } = useAppContext()
+    const { llmData } = useAppContext()
 
     const onDrop = useCallback((acceptedFiles: File[]) => {
         if (acceptedFiles[0]) {
@@ -35,11 +35,13 @@ export default function VideoFrame() {
 
         const formData = new FormData();
         formData.append("file", video as Blob);
+        formData.append("api_key", llmData.apiKey);
+        formData.append("model", llmData.model);
 
         try {
-            const response = await fetch('http://79.117.18.84:38414/video-to-frames/', {
+            const response = await fetch('http://localhost:8000/video-to-frames/', {
                 method: 'POST',
-                body: formData
+                body: formData,
             });
 
             if (response.ok) {

@@ -1,4 +1,4 @@
-analyze_video_promp = """Analyze each screen capture thoroughly to explain the actions the user is taking in a detailed, step-by-step manner.
+analyze_video_prompt = """Analyze each screen capture thoroughly to explain the actions the user is taking in a detailed, step-by-step manner.
 
 # Steps
 
@@ -13,6 +13,54 @@ analyze_video_promp = """Analyze each screen capture thoroughly to explain the a
 
 Full explanations for each capture will be as detailed as needed based on the complexity of the user actions depicted in the screen capture.
 """
+
+analyze_video_schema = {
+    "name": "video_explanation",
+    "strict": True,
+    "schema": {
+        "type": "object",
+        "properties": {
+            "steps": {
+                "type": "array",
+                "description": "A sequence of steps explaining actions taken in the video.",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "state_description": {
+                            "type": "string",
+                            "description": "A description of the state of the application or software at the time of the action."
+                        },
+                        "action": {
+                            "type": "string",
+                            "description": "The specific action performed, such as right click, left click, typing, etc.",
+                            "enum": [
+                                "right_click",
+                                "left_click",
+                                "double_click",
+                                "hover",
+                                "keyboard_input"
+                            ]
+                        },
+                        "outcome": {
+                            "type": "string",
+                            "description": "The result or consequence of the action taken."
+                        }
+                    },
+                    "required": [
+                        "state_description",
+                        "action",
+                        "outcome"
+                    ],
+                    "additionalProperties": False
+                }
+            }
+        },
+        "required": [
+            "steps"
+        ],
+        "additionalProperties": False
+    }
+}
 
 analyze_omniparser_image = """You are Screen Helper, a world-class reasoning engine whose task is to help users select the correct elements on a computer screen to complete a task. 
 

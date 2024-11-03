@@ -1,16 +1,11 @@
 from openai import OpenAI
-from dotenv import load_dotenv
 import cv2
 import base64
 from io import BytesIO
 from PIL import Image
 import numpy as np
 import json
-import os
-from prompts import analyze_video_promp
-
-load_dotenv()
-API_KEY = os.environ.get("OPENAI_API_KEY")
+from prompts import analyze_video_prompt, analyze_video_schema
 
 # Helper function to calculate Mean Squared Error (MSE) between two images
 
@@ -129,8 +124,8 @@ def process_video(video_path):
     return base64_images
 
 
-def analyze_video(parsed_images):
-    client = OpenAI(api_key=API_KEY)
+def analyze_video(parsed_images, api_key, model):
+    client = OpenAI(api_key=api_key)
 
     # Use map to apply the transformation to each item
     parsed_images = list(map(lambda img: {
@@ -141,14 +136,14 @@ def analyze_video(parsed_images):
     }, parsed_images))
 
     response = client.chat.completions.create(
-        model="gpt-4o",
+        model=model,
         messages=[
             {
                 "role": "system",
                 "content": [
                     {
                         "type": "text",
-                        "text": "analyze these screen captures carefully and explain in step by step the actions that the user is taking"
+                        "text": analyze_video_prompt
                     }
                 ]
             },
@@ -164,60 +159,8 @@ def analyze_video(parsed_images):
         presence_penalty=0,
         response_format={
             "type": "json_schema",
-            "json_schema": {
-                "name": "video_explanation",
-                "strict": True,
-                "schema": {
-                    "type": "object",
-                    "properties": {
-                        "steps": {
-                            "type": "array",
-                            "description": "A sequence of steps explaining actions taken in the video.",
-                            "items": {
-                                "type": "object",
-                                "properties": {
-                                    "state_description": {
-                                        "type": "string",
-                                        "description": "A description of the state of the application or software at the time of the action."
-                                    },
-                                    "action": {
-                                        "type": "string",
-                                        "description": "The specific action performed, such as right click, left click, typing, etc.",
-                                        "enum": [
-                                            "right_click",
-                                            "left_click",
-                                            "double_click",
-                                            "hover",
-                                            "keyboard_input"
-                                        ]
-                                    },
-                                    "outcome": {
-                                        "type": "string",
-                                        "description": "The result or consequence of the action taken."
-                                    }
-                                },
-                                "required": [
-                                    "state_description",
-                                    "action",
-                                    "outcome"
-                                ],
-                                "additionalProperties": False
-                            }
-                        }
-                    },
-                    "required": [
-                        "steps"
-                    ],
-                    "additionalProperties": False
-                }
-            }
+            "json_schema": analyze_video_schema
         }
     )
 
     return response
-
-
-# parsed_images = process_video("recording2.mov")
-# response = analyze_video(parsed_images)
-
-# print(response.choices[0].message.content)

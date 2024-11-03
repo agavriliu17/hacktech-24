@@ -4,6 +4,6 @@ export type LlmConnection = {
 }
 
 export enum LlmModels {
-    'gpt4o' = 'gpt4o',
-    'gpt4omini' = 'gpt4omini',
+    'gpt4o' = 'gpt-4o',
+    'gpt4omini' = 'gpt-4o-mini',
 }
